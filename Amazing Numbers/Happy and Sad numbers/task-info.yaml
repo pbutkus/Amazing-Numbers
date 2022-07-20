@@ -1,0 +1,1270 @@
+type: edu
+files:
+- name: src/numbers/Main.java
+  visible: true
+  text: |
+    package numbers;
+
+    public class Main {
+        public static void main(String[] args) {
+    //        write your code here
+        }
+    }
+  learner_created: false
+- name: test/util/Checker.java
+  visible: false
+  text: |
+    package util;
+
+    import org.hyperskill.hstest.exception.outcomes.WrongAnswer;
+
+    import java.text.MessageFormat;
+    import java.util.function.Predicate;
+    import java.util.function.UnaryOperator;
+
+    import static java.util.Objects.isNull;
+
+    public class Checker implements UnaryOperator<UserProgram> {
+        protected Predicate<UserProgram> validator;
+        protected String feedback;
+        protected Object[] parameters;
+
+        protected Checker() {
+            this("Incorrect output for user input: {0}.");
+        }
+
+        protected Checker(String feedback) {
+            this($ -> true, feedback);
+        }
+
+        public Checker(Predicate<UserProgram> validator, String feedback) {
+            this.feedback = feedback;
+            this.validator = validator;
+        }
+
+        @Override
+        public UserProgram apply(UserProgram program) {
+            if (validator.test(program)) {
+                return program;
+            }
+            throw new WrongAnswer(MessageFormat.format(feedback, isNull(parameters)
+                    ? new Object[]{program.getInput(), program.getOutput()} : parameters));
+
+        }
+
+    }
+  learner_created: false
+- name: test/util/TextChecker.java
+  visible: false
+  text: |
+    package util;
+
+    public class TextChecker extends Checker {
+
+        public TextChecker(String expected) {
+            this(expected, "Expected that the output contains \"{2}\".");
+        }
+
+        public TextChecker(String expected, String feedback) {
+            super(feedback);
+
+            validator = program -> {
+                parameters = new Object[]{program.getInput(), program.getOutput(), expected};
+                return program.getOutput().toLowerCase().contains(expected.toLowerCase());
+            };
+        }
+
+    }
+  learner_created: false
+- name: test/util/UserProgram.java
+  visible: false
+  text: |-
+    package util;
+
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import org.hyperskill.hstest.testing.TestedProgram;
+
+    import java.util.function.Function;
+
+    public class UserProgram {
+        private TestedProgram program;
+
+        private Object input;
+        private String output;
+
+        public UserProgram start(String... args) {
+            program = new TestedProgram();
+            output = program.start(args);
+            return this;
+        }
+
+        public UserProgram check(final Function<UserProgram, UserProgram> checker) {
+            return checker.apply(this);
+        }
+
+        public CheckResult result() {
+            return CheckResult.correct();
+        }
+
+        public UserProgram execute(Object userInput) {
+            this.input = userInput;
+            output = program.execute(userInput.toString());
+            return this;
+        }
+
+        public String getOutput() {
+            return output;
+        }
+
+        public Object getInput() {
+            return input;
+        }
+
+        public boolean isFinished() {
+            return program.isFinished();
+        }
+    }
+  learner_created: false
+- name: test/util/LinesChecker.java
+  visible: false
+  text: |
+    package util;
+
+    import static java.util.function.Predicate.not;
+
+    public class LinesChecker extends Checker {
+
+        public LinesChecker(final long expected) {
+            super("Expected {0} non blank lines but actual output contains {1} lines.");
+
+            validator = program -> {
+                final var actual = program.getOutput().lines().filter(not(String::isBlank)).count();
+                parameters = new Object[]{expected, actual};
+                return actual == expected;
+            };
+        }
+
+
+    }
+  learner_created: false
+- name: test/util/RegexChecker.java
+  visible: false
+  text: |
+    package util;
+
+    import java.util.regex.Pattern;
+
+    public class RegexChecker extends Checker {
+        private final Pattern expected;
+
+        public RegexChecker(final String regexp, final String feedback) {
+            this(regexp, Pattern.CASE_INSENSITIVE, feedback);
+        }
+
+        public RegexChecker(final String regexp, final int flags, final String feedback) {
+            super(feedback);
+            this.expected = Pattern.compile(regexp, flags);
+            validator = program -> expected.matcher(program.getOutput()).find();
+        }
+
+    }
+  learner_created: false
+- name: test/Request.java
+  visible: false
+  text: |
+    import util.LinesChecker;
+
+    import java.util.Random;
+    import java.util.regex.Pattern;
+
+    public class Request {
+        public static final Pattern PARAMETERS_SEPARATOR = Pattern.compile("\\s+");
+        public static final int MAX_COUNT = 20;
+        private static final Random random = new Random();
+
+        private final String request;
+        private final long start;
+        private final int count;
+        private String[] properties;
+
+        public Request(String request) {
+            this.request = request;
+            var data = PARAMETERS_SEPARATOR.split(request, 3);
+            int type = data.length;
+            properties = type == 3 ? PARAMETERS_SEPARATOR.split(data[2]) : new String[0];
+            count = type > 1 ? Integer.parseInt(data[1]) : 0;
+            start = Long.parseLong(data[0]);
+        }
+
+        public static Request random(Parameter params) {
+            final var start = 1 + random.nextInt(Short.MAX_VALUE);
+            if (params == Parameter.ONE) {
+                return new Request(String.valueOf(start));
+            }
+            final var count = 1 + random.nextInt(MAX_COUNT);
+            if (params == Parameter.TWO) {
+                return new Request(start + " " + count);
+            }
+            final var index = random.nextInt(NumberProperty.values().length);
+            final var property = NumberProperty.values()[index].name();
+            final var request = start + " " + count + " " + property;
+            return new Request(request);
+        }
+
+        public long getStart() {
+            return start;
+        }
+
+        public int getCount() {
+            return count;
+        }
+
+        public String[] getProperties() {
+            return properties;
+        }
+
+        public LinesChecker getLinesChecker() {
+            return new LinesChecker(count + 1);
+        }
+
+        @Override
+        public String toString() {
+            return request;
+        }
+
+        enum Parameter {ONE, TWO, THREE}
+    }
+  learner_created: false
+- name: test/ListChecker.java
+  visible: false
+  text: |
+    import util.Checker;
+    import util.UserProgram;
+
+    import java.util.Arrays;
+    import java.util.Set;
+    import java.util.function.LongPredicate;
+    import java.util.function.Predicate;
+    import java.util.regex.Pattern;
+    import java.util.stream.Collectors;
+    import java.util.stream.LongStream;
+
+    public class ListChecker extends Checker {
+        private static final Pattern LINE_PATTERN = Pattern.compile(
+                "\\s*(?<number>[\\d,. ]*\\d)\\s*(is|:|-)\\s*(?<properties>.+)",
+                Pattern.CASE_INSENSITIVE);
+        private static final Pattern NON_DIGIT_SYMBOL = Pattern.compile("\\D");
+        private static final Pattern PROPERTIES_SEPARATOR = Pattern.compile("[, ;]+");
+
+        private final long expectedCount;
+        private final long[] expectedList;
+
+        public ListChecker(Request request) {
+            this(request.getStart(), request.getCount(), request.getProperties());
+        }
+
+        public ListChecker(long start, long count) {
+            this(start, count, new String[0]);
+        }
+
+        public ListChecker(long start, long count, String properties) {
+            this(start, count, properties.split("[, ]+"));
+        }
+
+        public ListChecker(long start, long count, String[] queries) {
+            super("The list is incorrect");
+            this.validator = this::test;
+            this.expectedList = getExpectedList(start, count, queries);
+            this.expectedCount = count;
+        }
+
+        private static long[] getExpectedList(long start, long count, String[] queries) {
+            final var condition = Arrays.stream(queries).map(query -> {
+                final var isNegative = query.startsWith("-");
+                final var name = isNegative ? query.substring(1) : query;
+                final var property = NumberProperty.valueOf(name.toUpperCase());
+                return isNegative ? property.negate() : property;
+            }).reduce(number -> true, LongPredicate::and);
+
+            return LongStream
+                    .iterate(start, n -> n > 0, n -> n + 1)
+                    .filter(condition).limit(count).toArray();
+        }
+
+        public boolean test(UserProgram program) {
+            final var lines = program.getOutput()
+                    .lines()
+                    .filter(Predicate.not(String::isBlank))
+                    .limit(expectedCount)
+                    .collect(Collectors.toUnmodifiableList());
+
+            if (lines.size() != expectedCount) {
+                return false;
+            }
+
+            final var iterator = lines.iterator();
+            for (final long expectedNumber : expectedList) {
+                final var actualLine = iterator.next();
+                final var matcher = LINE_PATTERN.matcher(actualLine);
+                if (!matcher.matches()) {
+                    feedback = "Can''t parse line: \"{0}\". Expected: {1} is ...";
+                    parameters = new Object[]{actualLine, expectedNumber};
+                    return false;
+                }
+
+                final var rawNumber = matcher.group("number").strip();
+                final var actualNumber = NON_DIGIT_SYMBOL.matcher(rawNumber).replaceAll("");
+
+                if (!String.valueOf(expectedNumber).equals(actualNumber)) {
+                    feedback = "Expected number is {0} but actual number is {1}.";
+                    parameters = new Object[]{expectedNumber, rawNumber};
+                    return false;
+                }
+
+                final var actualProperties = PROPERTIES_SEPARATOR
+                        .splitAsStream(matcher.group("properties").toLowerCase())
+                        .collect(Collectors.toUnmodifiableList());
+
+                final var expectedProperties = Arrays
+                        .stream(NumberProperty.values())
+                        .filter(property -> property.test(expectedNumber))
+                        .map(Enum::name)
+                        .map(String::toLowerCase)
+                        .collect(Collectors.toUnmodifiableSet());
+
+                if (actualProperties.size() != expectedProperties.size()) {
+                    feedback = "For the number {0} the expected number of properties is {1} but the actual number of properties is {2}. " +
+                            "Expected properties are {3}. Actual properties are {4}";
+                    parameters = new Object[]{expectedNumber, expectedProperties.size(),
+                            actualProperties.size(), expectedProperties, actualProperties};
+                    return false;
+                }
+
+                if (!Set.copyOf(actualProperties).equals(expectedProperties)) {
+                    feedback = "For the number {0} the expected properties are {1}. The actual properties are {2}.";
+                    parameters = new Object[]{expectedNumber, expectedProperties, actualProperties};
+                }
+            }
+            return true;
+        }
+    }
+  learner_created: false
+- name: test/NumbersTest.java
+  visible: false
+  text: |
+    import org.hyperskill.hstest.dynamic.DynamicTest;
+    import org.hyperskill.hstest.stage.StageTest;
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import util.*;
+
+    import java.util.Arrays;
+    import java.util.Random;
+    import java.util.function.Function;
+    import java.util.function.Predicate;
+    import java.util.regex.Matcher;
+    import java.util.regex.Pattern;
+    import java.util.stream.LongStream;
+    import java.util.stream.Stream;
+
+    public final class NumbersTest extends StageTest {
+        private static final Random random = new Random();
+
+        private static final int NEGATIVE_NUMBERS_TESTS = 5;
+        private static final int FIRST_NUMBERS = 15;
+        private static final int RANDOM_TESTS = 10;
+        private static final int MAX_PROPERTIES = 5;
+        private static final int MAX_COUNT = 20;
+        private static final int MIN_START = 2;
+
+        private static final Checker WELCOME = new TextChecker("Welcome to Amazing Numbers!");
+
+        private static final String EXPLAIN = "The program should explain this in the help.";
+        private static final Function<UserProgram, UserProgram> HELP =
+                new TextChecker("Supported requests")
+                        .andThen(new RegexChecker(
+                                "(one|a) natural number",
+                                "In this stage, a user can enter one number to print a card. " + EXPLAIN))
+                        .andThen(new TextChecker(
+                                "two natural numbers",
+                                "In this stage, a user can enter two numbers to print a list. " + EXPLAIN))
+                        .andThen(new TextChecker(
+                                "properties to search for",
+                                "In this stage, a user can enter two numbers and properties to search for. "
+                                        + EXPLAIN))
+                        .andThen(new TextChecker(
+                                "property preceded by minus",
+                                "In this stage, a user can a minus in front of the property. "
+                                        + EXPLAIN))
+                        .andThen(new TextChecker(
+                                "enter 0 to exit",
+                                "Display the instructions on how to exit"));
+
+        private static final Checker ASK_REQUEST = new TextChecker(
+                "enter a request",
+                "The program should ask a user to enter a request."
+        );
+        private static final Checker ERROR_FIRST = new RegexChecker(
+                "The first (parameter|number) should be a natural number or zero",
+                "The first parameter \"{0}\" is wrong. The program should print an error message."
+        );
+        private static final Checker ERROR_SECOND = new RegexChecker(
+                "The second (parameter|number) should be a natural number",
+                "The second parameter \"{0}\" is wrong. The program should print an error message."
+        );
+        private static final Checker ERROR_PROPERTY = new RegexChecker(
+                "The property .+ is wrong",
+                "The request: \"{0}\" has one wrong property. "
+                        + "Expected message: \"The property ... is wrong\"."
+        );
+        private static final Checker ERROR_PROPERTIES = new RegexChecker(
+                "The properties .+ are wrong",
+                "The request: \"{0}\" has two or more incorrect properties. "
+                        + "Expected that error message contains: \"The properties ... are wrong\"."
+        );
+        private static final Checker HELP_PROPERTIES = new TextChecker(
+                "Available properties"
+        );
+        private static final Checker LIST_PROPERTIES = new Checker(
+                program -> Arrays.stream(NumberProperty.values())
+                        .map(Enum::name)
+                        .map("(?i)\\b"::concat)
+                        .map(Pattern::compile)
+                        .map(p -> p.matcher(program.getOutput()))
+                        .allMatch(Matcher::find),
+                "If incorrect property has been specified, show the list of the available properties."
+        );
+        private static final Checker PROPERTIES_OF = new RegexChecker(
+                "properties of \\d",
+                "The first line of number''s properties should contain \"Properties of {0}\"."
+        );
+        private static final Checker MUTUALLY_EXCLUSIVE = new TextChecker(
+                "The request contains mutually exclusive properties",
+                "The request contains mutually exclusive properties. "
+                        + "The program should cancel the request and warn the user."
+        );
+        private static final Checker RUNNING = new Checker(Predicate.not(UserProgram::isFinished),
+                "The program should continue to work till the user enter \"0\"."
+        );
+        private static final Checker FINISHED = new Checker(UserProgram::isFinished,
+                "The program should finish when the user entered \"0\"."
+        );
+        private final UserProgram program = new UserProgram();
+
+        private final String[] wrongProperty = new String[]{
+                "1 10 May", "40 2 bay", "37 4 8", "67 2 day", "2 54 Prime", "6 8 ...", "5 9 none"
+        };
+        private final String[] wrongSecondProperty = new String[]{
+                "1 10 odd girl", "40 2 even day", "37 4 spy 89", "67 2 DUCK +"
+        };
+        private final String[] wrongTwoProperties = new String[]{
+                "1 10 boy friend", "40 2 long day", "37 4 hot girl", "67 2 strong drake"
+        };
+        private static final String[] ONE_PROPERTY_WRONG = new String[]{
+                "26534 3 buzz evens palindromic",
+                "4384 2 odd -buzz -palindromic shiny gapful",
+                "1 7 hot sunny odd odd -even",
+                "78343 4 sunny -duck mac odd",
+                "3 4 -even -sunny -hot"
+        };
+        private final String[] mutuallyExclusive = new String[]{
+                // Stage #6 Two properties
+                "5 1 odd even", "4 3 even odd", "32 2 sunny square", "3153 2 spy duck", "6 7 duck spy",
+                // Stage #7 Several properties
+                "1 2 spy odd sunny even", "7 2 sunny even duck buzz square", "9 5 even spy buzz duck",
+                // Stage #8 Properties preceded by minus
+                "6 6 -odd -even", "6 7 odd -odd", "8 1 -even even", "3 5 odd duck buzz -duck sunny"
+        };
+        // Stage #3
+
+        @DynamicTest(order = 5)
+        CheckResult welcomeTest() {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        @DynamicTest(repeat = NEGATIVE_NUMBERS_TESTS, order = 10)
+        CheckResult notNaturalNumbersTest() {
+            long negativeNumber = -random.nextInt(Byte.MAX_VALUE) - 1L;
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(negativeNumber)
+                    .check(ERROR_FIRST)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        @DynamicTest(repeat = RANDOM_TESTS, order = 15)
+        CheckResult notNaturalSecondNumberTest() {
+            int first = 1 + random.nextInt(Short.MAX_VALUE);
+            int negativeSecond = -random.nextInt(Short.MAX_VALUE);
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(first + " " + negativeSecond)
+                    .check(ERROR_SECOND)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        // Stage #4
+
+        @DynamicTest(order = 20)
+        CheckResult naturalNumbersTest() {
+            final var numbers = LongStream.concat(
+                    LongStream.range(1, FIRST_NUMBERS),
+                    random.longs(RANDOM_TESTS, 1, Long.MAX_VALUE)
+            );
+
+            program.start().check(WELCOME).check(HELP);
+
+            numbers.forEach(number -> program
+                    .check(ASK_REQUEST)
+                    .execute(number)
+                    .check(PROPERTIES_OF)
+                    .check(new PropertiesChecker(number))
+                    .check(RUNNING));
+
+            return program
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        @DynamicTest(order = 40)
+        CheckResult firstNumbersListTest() {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute("1 " + FIRST_NUMBERS)
+                    .check(new LinesChecker(FIRST_NUMBERS + 1))
+                    .check(new ListChecker(1, FIRST_NUMBERS))
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        private Object[][] getRandomTwo() {
+            return random
+                    .longs(RANDOM_TESTS, MIN_START, Long.MAX_VALUE - MAX_COUNT)
+                    .mapToObj(start -> new Long[]{start, (long) 1 + random.nextInt(MAX_COUNT)})
+                    .toArray(Long[][]::new);
+        }
+
+        // Stage #5
+
+        @DynamicTest(data = "getRandomTwo", order = 44)
+        CheckResult twoRandomNumbersTest(long start, long count) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(start + " " + count)
+                    .check(new LinesChecker(count + 1))
+                    .check(new ListChecker(start, count))
+                    .check(RUNNING)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        @DynamicTest(data = "wrongProperty", order = 50)
+        CheckResult wrongPropertyRequestTest(String wrongProperty) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(wrongProperty)
+                    .check(ERROR_PROPERTY)
+                    .check(HELP_PROPERTIES)
+                    .check(LIST_PROPERTIES)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        // The test generates and checks request "1 10 <property>" for each property
+
+        @DynamicTest(order = 53)
+        CheckResult allPropertiesTest() {
+            program.start().check(WELCOME).check(HELP);
+
+            Arrays.stream(NumberProperty.values())
+                    .map(Enum::name)
+                    .map("1 10 "::concat)
+                    .map(Request::new)
+                    .peek(program.check(ASK_REQUEST)::execute)
+                    .forEach(request -> program
+                            .check(request.getLinesChecker())
+                            .check(new ListChecker(request))
+                            .check(RUNNING)
+                    );
+
+            return program.execute(0).check(FINISHED).result();
+        }
+
+        // Stage #6
+
+        @DynamicTest(repeat = RANDOM_TESTS, order = 55)
+        CheckResult randomTwoNumbersAndPropertyTest() {
+            final var request = Request.random(Request.Parameter.THREE);
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(request)
+                    .check(request.getLinesChecker())
+                    .check(new ListChecker(request))
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        @DynamicTest(data = "wrongSecondProperty", order = 60)
+        CheckResult wrongSecondPropertyRequestTest(String wrongSecondProperty) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(wrongSecondProperty)
+                    .check(ERROR_PROPERTY)
+                    .check(HELP_PROPERTIES)
+                    .check(LIST_PROPERTIES)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        @DynamicTest(data = "wrongTwoProperties", order = 62)
+        CheckResult wrongTwoPropertiesRequestTest(String wrongTwoProperties) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(wrongTwoProperties)
+                    .check(ERROR_PROPERTIES)
+                    .check(HELP_PROPERTIES)
+                    .check(LIST_PROPERTIES)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        private Request[] searchTwoProperties() {
+            return Stream.of(
+                    "1 7 even spy",
+                    "1 10 odd buzz",
+                    "1 9 buzz gapful",
+                    "1 10 spy buzz",
+                    "100000 2 even spy",
+                    "100 4 odd gapful",
+                    "2000 4 palindromic duck")
+                    .map(Request::new)
+                    .toArray(Request[]::new);
+        }
+
+        @DynamicTest(data = "searchTwoProperties", order = 65)
+        CheckResult twoNumbersAndTwoPropertyTest(Request request) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(request)
+                    .check(request.getLinesChecker())
+                    .check(new ListChecker(request))
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        // Stage #7
+
+        @DynamicTest(data = "ONE_PROPERTY_WRONG", order = 72)
+        CheckResult oneWrongPropertyTest(String request) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(request)
+                    .check(ERROR_PROPERTY)
+                    .check(HELP_PROPERTIES)
+                    .check(LIST_PROPERTIES)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        private Request[] getRandomRequests() {
+            return Stream.of(
+                    "1 7 odd spy palindromic",
+                    "1 10 even palindromic duck buzz",
+                    "1 9 even palindromic duck buzz gapful",
+                    "1 10 even sunny duck buzz gapful",
+                    "100000 2 even spy buzz gapful",
+                    "100 4 odd spy gapful",
+                    "2000 4 even palindromic duck",
+                    // Stage #8
+                    "1 15 odd spy -duck spy buzz",
+                    "1 2 jumping happy -spy"
+            )
+                    .map(Request::new)
+                    .toArray(Request[]::new);
+        }
+
+        @DynamicTest(data = "getRandomRequests", order = 75)
+        CheckResult manyPropertiesTest(Request request) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(request)
+                    .check(request.getLinesChecker())
+                    .check(new ListChecker(request))
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        // Stage #8 If a property is preceded by a minus, this property should not be present in a number
+
+        @DynamicTest(data = "mutuallyExclusive", order = 80)
+        CheckResult mutuallyExclusivePropertiesTest(String mutuallyExclusive) {
+            return program
+                    .start()
+                    .check(WELCOME)
+                    .check(HELP)
+                    .check(ASK_REQUEST)
+                    .execute(mutuallyExclusive)
+                    .check(MUTUALLY_EXCLUSIVE)
+                    .check(RUNNING)
+                    .check(ASK_REQUEST)
+                    .execute(0)
+                    .check(FINISHED)
+                    .result();
+        }
+
+        // The test generates and checks request "1 15 -PROPERTY" for all properties
+
+        @DynamicTest(order = 85)
+        CheckResult allMinusPropertiesTest() {
+            program.start().check(WELCOME).check(HELP);
+
+            Arrays.stream(NumberProperty.values())
+                    .map(Enum::name)
+                    .map("1 15 -"::concat)
+                    .map(Request::new)
+                    .peek(program.check(ASK_REQUEST)::execute)
+                    .forEach(request -> program
+                            .check(request.getLinesChecker())
+                            .check(new ListChecker(request))
+                            .check(RUNNING)
+                    );
+
+            return program.execute(0).check(FINISHED).result();
+        }
+
+    }
+  learner_created: false
+- name: test/NumberProperty.java
+  visible: false
+  text: |
+    import java.util.Optional;
+    import java.util.function.LongPredicate;
+    import java.util.regex.Pattern;
+    import java.util.stream.LongStream;
+
+    import static java.lang.Character.getNumericValue;
+
+    public enum NumberProperty implements LongPredicate {
+        EVEN(x -> x % 2 == 0),
+        ODD(x -> x % 2 != 0),
+        BUZZ(x -> x % 7 == 0 || x % 10 == 7),
+        DUCK(number -> digits(number).anyMatch(digit -> digit == 0)),
+        PALINDROMIC(number -> {
+            final var digits = String.valueOf(number);
+            return new StringBuilder(digits).reverse().toString().equals(digits);
+        }),
+        GAPFUL(number -> number >= 100 &&
+                number % (getNumericValue(String.valueOf(number).charAt(0)) * 10L + number % 10) == 0),
+        SPY(x -> digits(x).sum() == digits(x).reduce(1L, (a, b) -> a * b)),
+        SQUARE(number -> Math.sqrt(number) % 1 == 0),
+        SUNNY(number -> Math.sqrt(number + 1) % 1 == 0),
+        JUMPING(number -> {
+            for (long previous = number % 10, rest = number / 10; rest > 0; rest /= 10) {
+                long current = rest % 10;
+                long delta = previous - current;
+                if (delta * delta != 1) {
+                    return false;
+                }
+                previous = current;
+            }
+            return true;
+        }),
+        HAPPY(number -> LongStream.iterate(number, i -> i > 1, NumberProperty::nextHappy).noneMatch(i -> i == 4)),
+        SAD(number -> !HAPPY.test(number));
+
+        private final LongPredicate hasProperty;
+        private final Pattern pattern = Pattern.compile(
+                name() + "\\s*[:-]\\s*(?<value>true|false)",
+                Pattern.CASE_INSENSITIVE
+        );
+
+        NumberProperty(LongPredicate hasProperty) {
+            this.hasProperty = hasProperty;
+        }
+
+        private static LongStream digits(long number) {
+            return Long.toString(number).chars().mapToLong(Character::getNumericValue);
+        }
+
+        @Override
+        public boolean test(long number) {
+            return hasProperty.test(number);
+        }
+
+        public Optional<Boolean> extractValue(String output) {
+            final var matcher = pattern.matcher(output);
+            final var isFound = matcher.find();
+            return Optional
+                    .ofNullable(isFound ? matcher.group("value") : null)
+                    .map(Boolean::valueOf);
+        }
+
+        private static long nextHappy(long number) {
+            long result = 0;
+            for (long i = number; i > 0; i /= 10) {
+                long digit = i % 10;
+                result += digit * digit;
+            }
+            return result;
+        }
+    }
+  learner_created: false
+- name: test/PropertiesChecker.java
+  visible: false
+  text: |
+    import util.Checker;
+    import util.UserProgram;
+
+    public class PropertiesChecker extends Checker {
+        private final long number;
+
+        public PropertiesChecker(long number) {
+            this.number = number;
+            validator = this::test;
+        }
+
+        public boolean test(UserProgram program) {
+            for (var property : NumberProperty.values()) {
+                final var name = property.name();
+
+                if (!program.getOutput().toLowerCase().contains(name.toLowerCase())) {
+                    feedback = "The property \"{0}\" was not found in the output.";
+                    parameters = new Object[]{name};
+                    return false;
+                }
+
+                final var expected = property.test(number);
+                final var actualValue = property.extractValue(program.getOutput());
+
+                if (actualValue.isEmpty()) {
+                    feedback = "The value for property {0} was not found. Expected: {1}";
+                    parameters = new Object[]{name, expected};
+                    return false;
+                }
+                final var actual = actualValue.get();
+
+                if (expected != actual) {
+                    feedback = "For the property {0}, the expected value is {1} but was found {2}.";
+                    parameters = new Object[]{name, expected, actual};
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+  learner_created: false
+- name: src/numbers/logic/AmazingNumbers.java
+  visible: true
+  text: "package numbers.logic;\n\nimport java.math.BigInteger;\n\npublic class AmazingNumbers\
+    \ {\n\n    public boolean isEven(String number) {\n        BigInteger bigNum =\
+    \ new BigInteger(number);\n\n        return bigNum.remainder(BigInteger.valueOf(2)).equals(new\
+    \ BigInteger(\"0\"));\n    }\n\n    public boolean isBuzz(String number) {\n \
+    \       BigInteger bigNum = new BigInteger(number);\n        boolean endsWithSeven\
+    \ = false;\n        boolean divisibleBySeven = false;\n\n        if (number.endsWith(\"\
+    7\")) {\n            endsWithSeven = true;\n        }\n\n        if (bigNum.remainder(BigInteger.valueOf(7)).equals(new\
+    \ BigInteger(\"0\"))) {\n            divisibleBySeven = true;\n        }\n\n \
+    \       return endsWithSeven || divisibleBySeven;\n    }\n\n    public boolean\
+    \ isDuck(String number) {\n        String[] splitNumber = number.split(\"\");\n\
+    \n        for (int i = 1; i < splitNumber.length; i++) {\n            if (\"0\"\
+    .equals(splitNumber[i])) {\n                return true;\n            }\n    \
+    \    }\n\n        return false;\n    }\n\n    public boolean isPalindromic(String\
+    \ number) {\n        String[] splitNumber = number.split(\"\");\n        StringBuilder\
+    \ reversedNumber = new StringBuilder();\n\n        for (int i = splitNumber.length\
+    \ - 1; i >= 0; i--) {\n            reversedNumber.append(splitNumber[i]);\n  \
+    \      }\n\n        return reversedNumber.toString().equals(number);\n    }\n\n\
+    \    public boolean isGapful(String number) {\n        if (number.length() >=\
+    \ 3) {\n            BigInteger firstAndLast = new BigInteger((number.charAt(0)\
+    \ + number.substring(number.length() - 1)));\n            BigInteger num = new\
+    \ BigInteger(number);\n\n            return num.remainder(firstAndLast).equals(new\
+    \ BigInteger(\"0\"));\n        }\n\n        return false;\n    }\n\n    public\
+    \ boolean isSpy(String number) {\n        BigInteger sum = BigInteger.ZERO;\n\
+    \        BigInteger product = BigInteger.ONE;\n        String[] splitNumber =\
+    \ number.split(\"\");\n\n        for (String s : splitNumber) {\n            sum\
+    \ = sum.add(new BigInteger(s));\n            product = product.multiply(new BigInteger(s));\n\
+    \        }\n\n        return sum.equals(product);\n    }\n\n    public boolean\
+    \ isSquare(String number) {\n        BigInteger testNum = new BigInteger(number);\n\
+    \        BigInteger sqrt = testNum.sqrt();\n\n        return (testNum.subtract(sqrt.pow(2)).equals(new\
+    \ BigInteger(\"0\")));\n    }\n\n    public boolean isSunny(String number) {\n\
+    \        BigInteger num = new BigInteger(number);\n        num = num.add(BigInteger.ONE);\n\
+    \n        return isSquare(num.toString());\n    }\n\n    public boolean isJumping(String\
+    \ number) {\n        if (number.length() > 1) {\n            for (int i = 0; i\
+    \ < number.length() - 1; i++) {\n                int c1 = number.charAt(i);\n\
+    \                int c2 = number.charAt(i + 1);\n                int diff = c1\
+    \ - c2;\n\n                diff *= diff;\n\n                if (diff != 1) {\n\
+    \                    return false;\n                }\n            }\n       \
+    \ }\n\n        return true;\n    }\n\n    public boolean isHappy(String number)\
+    \ {\n        String[] splitNumber = number.split(\"\");\n\n        \n\n      \
+    \  return false;\n    }\n\n}\n"
+  learner_created: true
+- name: src/numbers/ui/UserInterface.java
+  visible: true
+  text: |
+    package numbers.ui;
+
+    import numbers.logic.PropertiesBuilder;
+
+    import java.math.BigInteger;
+    import java.util.ArrayList;
+    import java.util.Arrays;
+    import java.util.Scanner;
+
+    public class UserInterface {
+
+        private final Scanner scanner;
+        private final PropertiesBuilder propertiesBuilder;
+
+        public UserInterface(Scanner scanner) {
+            this.scanner = scanner;
+            this.propertiesBuilder = new PropertiesBuilder();
+        }
+
+        public void start() {
+            System.out.println("Welcome to Amazing Numbers!");
+            System.out.println();
+            printInstructions();
+
+            while (true) {
+                System.out.println("Enter a request:");
+                String input = scanner.nextLine();
+                input = input.toLowerCase();
+                System.out.println();
+
+                String[] splitInput = input.split(" ");
+
+                if ("0".equals(input)) {
+                    System.out.println("Goodbye!");
+                    break;
+                }
+
+                if ("".equals(input)) {
+                    printInstructions();
+                }
+
+                try {
+                    if (new BigInteger(splitInput[0]).compareTo(BigInteger.valueOf(1)) < 0) {
+                        System.out.println("The first parameter should be a natural number or zero.");
+                    } else {
+                        if (splitInput.length > 1) {
+                            if (Integer.parseInt(splitInput[1]) > 0) {
+                                if (splitInput.length == 2) {
+                                    printPropertiesOfList(splitInput);
+                                } else {
+                                    printPropertiesOfListWithGivenProperty(splitInput);
+                                }
+                            } else {
+                                System.out.println("The second parameter should be a natural number.");
+                            }
+                        } else {
+                            printPropertiesOfSingleNumber(input);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    System.out.println("The first parameter should be a natural number or zero.");
+                }
+
+                System.out.println();
+            }
+        }
+
+        private void printInstructions() {
+            System.out.println("Supported requests:");
+            System.out.println("- enter a natural number to know its properties;");
+            System.out.println("- enter two natural numbers to obtain the properties of the list:");
+            System.out.println("  * the first parameter represents a starting number;");
+            System.out.println("  * the second parameter shows how many consecutive numbers are to be processed;");
+            System.out.println("- two natural numbers and properties to search for;");
+            System.out.println("- separate the parameters with one space;");
+            System.out.println("- enter 0 to exit.");
+            System.out.println();
+        }
+
+        private void printPropertiesOfSingleNumber(String input) {
+            ArrayList<String> properties = propertiesBuilder.propertiesOfSingleNumber(input);
+
+            properties.forEach(System.out::println);
+        }
+
+        private void printPropertiesOfList(String[] input) {
+            BigInteger num = new BigInteger(input[0]);
+            int amount = Integer.parseInt(input[1]);
+            ArrayList<String> propertiesToPrint = propertiesBuilder.propertiesOfList(num, amount);
+
+            propertiesToPrint.forEach(System.out::println);
+        }
+
+        private void printPropertiesOfListWithGivenProperty(String[] input) {
+            BigInteger num = new BigInteger(input[0]);
+            int amount = Integer.parseInt(input[1]);
+
+            ArrayList<String> params = new ArrayList<>(Arrays.asList(input).subList(2, input.length));
+
+            ArrayList<String> propertiesToPrint = propertiesBuilder.propertiesOfListWithParameters(num, amount, params);
+
+            propertiesToPrint.forEach(System.out::println);
+        }
+
+    }
+  learner_created: true
+- name: src/numbers/logic/PropertiesBuilder.java
+  visible: true
+  text: |
+    package numbers.logic;
+
+    import java.math.BigInteger;
+    import java.util.ArrayList;
+
+    public class PropertiesBuilder {
+
+        private final AmazingNumbers amazingNumbers;
+
+        public PropertiesBuilder() {
+            this.amazingNumbers = new AmazingNumbers();
+        }
+
+        public ArrayList<String> propertiesOfList(BigInteger num, int amount) {
+            ArrayList<String> propertiesList = new ArrayList<>();
+
+            for (int i = 0; i < amount; i++) {
+                String properties = propertiesOfNumberForList(num);
+
+                propertiesList.add(properties);
+                num = num.add(BigInteger.ONE);
+            }
+
+            return propertiesList;
+        }
+
+        public ArrayList<String> propertiesOfListWithParameters(BigInteger num, int amount, ArrayList<String> parameters) {
+            ArrayList<String> propertiesList = new ArrayList<>();
+            String availableProperties = "[EVEN, ODD, BUZZ, DUCK, PALINDROMIC, GAPFUL, SPY, SQUARE, SUNNY, JUMPING]";
+            ArrayList<String> wrongProperties = wrongProperties(parameters);
+            if (wrongProperties.size() > 0) {
+                String wrongPropertiesAsString = String.join(", ", wrongProperties);
+
+                if (wrongProperties.size() == 1) {
+                    propertiesList.add("The property [" + wrongPropertiesAsString + "] is wrong.");
+                } else {
+                    propertiesList.add("The properties [" + wrongPropertiesAsString + "] are wrong.");
+                }
+
+                propertiesList.add("Available properties: " + availableProperties);
+
+                return propertiesList;
+            }
+
+            if ((parameters.size() > 1) && illegalCombinations(parameters) != null) {
+                String illegal = illegalCombinations(parameters);
+
+                propertiesList.add("The request contains mutually exclusive properties: " + illegal);
+                propertiesList.add("There are no numbers with these properties.");
+
+                return propertiesList;
+            }
+
+            int i = 0;
+
+            while (i < amount) {
+                String properties = propertiesOfNumberForList(num);
+
+                boolean correct = true;
+
+                for (int j = 0; j < parameters.size(); j++) {
+                    if (!(properties.contains(parameters.get(j)))) {
+                        correct = false;
+                        break;
+                    }
+                }
+
+                if (correct) {
+                    propertiesList.add(properties);
+                    i++;
+                }
+
+                num = num.add(BigInteger.ONE);
+            }
+
+            return propertiesList;
+        }
+
+        public ArrayList<String> propertiesOfSingleNumber(String number) {
+            ArrayList<String> properties = new ArrayList<>();
+
+            properties.add("Properties of " + number);
+            properties.add("        even: " + amazingNumbers.isEven(number));
+            properties.add("         odd: " + !(amazingNumbers.isEven(number)));
+            properties.add("        buzz: " + amazingNumbers.isBuzz(number));
+            properties.add("        duck: " + amazingNumbers.isDuck(number));
+            properties.add(" palindromic: " + amazingNumbers.isPalindromic(number));
+            properties.add("      gapful: " + amazingNumbers.isGapful(number));
+            properties.add("         spy: " + amazingNumbers.isSpy(number));
+            properties.add("      square: " + amazingNumbers.isSquare(number));
+            properties.add("       sunny: " + amazingNumbers.isSunny(number));
+            properties.add("     jumping: " + amazingNumbers.isJumping(number));
+
+            return properties;
+        }
+
+        private String propertiesOfNumberForList(BigInteger num) {
+            String numAsString = num.toString();
+            String properties = "             " + numAsString + " is ";
+
+            if (amazingNumbers.isEven(numAsString)) {
+                properties += "even";
+            } else {
+                properties += "odd";
+            }
+
+            if (amazingNumbers.isBuzz(numAsString)) {
+                properties += ", buzz";
+            }
+
+            if (amazingNumbers.isDuck(numAsString)) {
+                properties += ", duck";
+            }
+
+            if (amazingNumbers.isPalindromic(numAsString)) {
+                properties += ", palindromic";
+            }
+
+            if (amazingNumbers.isGapful(numAsString)) {
+                properties += ", gapful";
+            }
+
+            if (amazingNumbers.isSpy(numAsString)) {
+                properties += ", spy";
+            }
+
+            if (amazingNumbers.isSquare(numAsString)) {
+                properties += ", square";
+            }
+
+            if (amazingNumbers.isSunny(numAsString)) {
+                properties += ", sunny";
+            }
+
+            if (amazingNumbers.isJumping(numAsString)) {
+                properties += ", jumping";
+            }
+
+            return properties;
+        }
+
+        private ArrayList<String> wrongProperties(ArrayList<String> properties) {
+            String availableProperties = "[EVEN, ODD, BUZZ, DUCK, PALINDROMIC, GAPFUL, SPY, SQUARE, SUNNY, JUMPING]";
+            ArrayList<String> wrongProperties = new ArrayList<>();
+
+            for (String property : properties) {
+                if (!(availableProperties.contains(property.toUpperCase()))) {
+                    wrongProperties.add(property.toUpperCase());
+                }
+            }
+
+            return wrongProperties;
+        }
+
+        private String illegalCombinations(ArrayList<String> properties) {
+            if (properties.size() > 1) {
+                String propertiesString = String.join(", ", properties).toUpperCase();
+
+                if (propertiesString.contains("EVEN") && propertiesString.contains("ODD")) {
+                    return "[EVEN, ODD]";
+                }
+
+                if (propertiesString.contains("DUCK") && propertiesString.contains("SPY")) {
+                    return "[DUCK, SPY]";
+                }
+
+                if (propertiesString.contains("SUNNY") && propertiesString.contains("SQUARE")) {
+                    return "[SUNNY, SQUARE]";
+                }
+            }
+
+            return null;
+        }
+
+    }
+  learner_created: true
+- name: src/numbers/enums/Prop.java
+  visible: true
+  learner_created: true
+feedback_link: https://hyperskill.org/learn/step/13205#comment
+status: Solved
+feedback:
+  message: Well done! You've finished the project. Select a new project on <a href="https://hyperskill.org/projects">JetBrains
+    Academy</a> to continue learning.
+  time: Wed, 20 Jul 2022 14:01:29 UTC
+record: -1
